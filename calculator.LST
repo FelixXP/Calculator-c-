@@ -1,0 +1,337 @@
+C51 COMPILER V9.00   CALCULATOR                                                            03/01/2016 16:31:57 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE CALCULATOR
+OBJECT MODULE PLACED IN calculator.OBJ
+COMPILER INVOKED BY: D:\编程软件\Keil\C51\BIN\C51.EXE calculator.c BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include<reg52.h>
+   2          #define uchar unsigned char
+   3          #define uint unsigned  int
+   4          uchar code table[]={
+   5                  '7','8','9','+',
+   6                  '4','5','6','-',
+   7                  '1','2','3','*',
+   8                  'C','0','=','/'
+   9          };
+  10          uchar tb[12];
+  11          sbit lcden=P3^4;        //液晶使能端
+  12          sbit lcdrs=P3^5;        //液晶数据命令选择端
+  13          sbit dula=P2^6;         //申明U1锁存器的锁存端
+  14          sbit wela=P2^7;         //申明U2锁存器的锁存端
+  15          uchar num;
+  16          int ERROR=0;
+  17          uint op1=0,op2=0;  //op1->第一个输入数  op2->第二个输入数       
+  18          uchar opc=0,pos=0; //opc->运算符  ops->位置
+  19          long int res=0;                 //计算结果初值为0
+  20          uchar lastkey;
+  21          
+  22          /************************
+  23                  延时函数
+  24          ************************/
+  25          void delay(uint z){
+  26   1              uint x,y;
+  27   1              for(x=z;x>0;x--)
+  28   1                      for(y=110;y>0;y--);
+  29   1      }
+  30          
+  31          
+  32          /************************
+  33                  液晶写命令
+  34          ************************/
+  35          void write_com(uchar com){
+  36   1              lcdrs=0;
+  37   1              P0=com;
+  38   1              delay(5);
+  39   1              lcden=1;
+  40   1              delay(5);
+  41   1              lcden=0;
+  42   1      }
+  43          
+  44          /***********************
+  45                  液晶写数据
+  46          ************************/
+  47          void write_data(uchar date){
+  48   1              lcdrs=1;
+  49   1              P0=date;
+  50   1              delay(5);
+  51   1              lcden=1;
+  52   1              delay(5);
+  53   1              lcden=0;
+  54   1      }
+  55          
+C51 COMPILER V9.00   CALCULATOR                                                            03/01/2016 16:31:57 PAGE 2   
+
+  56          
+  57          /***********************
+  58                  液晶初始化
+  59          ************************/
+  60          void init(){
+  61   1              dula=0;
+  62   1              wela=0;
+  63   1              lcden=0;
+  64   1              write_com(0x38);//设置16X2显示,5X7点阵,8位数据接口
+  65   1              write_com(0x0f);//设置开显示，不显示光标
+  66   1              write_com(0x06);//写一个字符后地址指针加1
+  67   1              write_com(0x01);//显示清零，数据指针清零
+  68   1      }
+  69          
+  70          
+  71          /***********************
+  72                          液晶显示输入字符
+  73                          x->位置
+  74                          y->0->第一行
+  75                          y->1->第二行
+  76                          ch->要写入的字符（一次只能写入一个字符？）
+  77          ************************/
+  78          void display1602c(uchar x,uchar y,uchar ch){ 
+  79   1        //x=0-15,y=0-1;
+  80   1        uchar Addr;
+  81   1        Addr=x+(y*0x40);       
+  82   1        write_com(0x80+Addr);
+  83   1        if(ch!='='){write_data(ch);}
+  84   1        
+  85   1      }
+  86          
+  87          //这个函数 并没有用到
+  88          void display1602s(uchar x,uchar y,uchar *s){ 
+  89   1        //x=0-15,y=0-1;
+  90   1        uchar Addr;
+  91   1        Addr=x+(y*0x40);       
+  92   1        write_com(0x80+Addr);
+  93   1        while(*s!=0){ 
+  94   2          write_data(*s);
+  95   2          s++;
+  96   2        }
+  97   1      }
+  98          
+  99          
+ 100          /*******************************************
+ 101                          液晶显示计算结果
+ 102                          获取结果的每一位并输出显示
+ 103          *******************************************/
+ 104          uchar display1602i(uchar x,uchar y,int num){ 
+ 105   1        if(ERROR==1){
+ 106   2                 write_com(0x80+(y*0x40));    
+ 107   2                      write_data('x'); //在计算结果前显示'='
+ 108   2                      ERROR=0;
+ 109   2        }
+ 110   1        else{
+ 111   2              //x=0-15,y=0-1;
+ 112   2        uchar Addr,a[6],t=0,i,flag=0;
+ 113   2          if(num==0){
+ 114   3              a[t++]='0';
+ 115   3        }   
+ 116   2        if (num<0){//如果计算结果为负数，将它转换成正数 
+ 117   3          num=-num; 
+C51 COMPILER V9.00   CALCULATOR                                                            03/01/2016 16:31:57 PAGE 3   
+
+ 118   3          flag=1;   
+ 119   3        }
+ 120   2        while(num!=0){//读取计算结果的每一位的数字 a[0]->个位         a[1]->十位....  
+ 121   3          a[t++]=num%10+'0';
+ 122   3          num=num/10;
+ 123   3        } 
+ 124   2              if(flag)//如果计算结果为复数，添加负号'-'
+ 125   2              a[t++]='-'; 
+ 126   2              Addr=x+(y*0x40);
+ 127   2      /*      if(tb[0]=='/'||tb[0]=='*'){ //如果第一个输入是*或者/，报错
+ 128   2                 display1602c(0,1,'X');
+ 129   2                 op1=0;op2=0;opc=0;res=0;pos=0;
+ 130   2                      uchar info[6]="ERROR";
+ 131   2                      write_com(0x80+(y*0x40));
+ 132   2                      for(i=0;info[i];i++){
+ 133   2                              write_data(info[i]);
+ 134   2                      }
+ 135   2      
+ 136   2              }else{ */
+ 137   2                      write_com(0x80+(y*0x40));       
+ 138   2                      write_data('='); //在计算结果前显示'='
+ 139   2      
+ 140   2                      write_com(0x80+Addr);
+ 141   2                      for(i=0;i<t;i++){        
+ 142   3                              write_data(a[t-1-i]);
+ 143   3                              tb[i]=a[t-1-i];
+ 144   3                      }
+ 145   2              
+ 146   2        
+ 147   2        return (x+t);
+ 148   2        }
+ 149   1      }
+ 150          
+ 151          
+ 152          
+ 153          /***********************
+ 154                          延时函数
+ 155          ************************/
+ 156          void delayms(uint xms){
+ 157   1              uint i,j;
+ 158   1              for(i=xms;i>0;i--)                    //i=xms即延时约xms毫秒
+ 159   1                      for(j=110;j>0;j--);
+ 160   1      }
+ 161          
+ 162          
+ 163          
+ 164          /************************
+ 165                  键盘扫描函数
+ 166                  返回按下4*4键盘中哪一个键（0--15）
+ 167          *************************/
+ 168          uchar matrixkeyscan(){
+ 169   1        uchar i,temp,key=16,line=0xfe;
+ 170   1        for(i=0;i<4;i++){ 
+ 171   2          P1=line;   //0xfe,0xfd,0xfb,0xf7
+ 172   2          temp=P1;//temp=0xfe;
+ 173   2          temp=temp&0xf0;     //temp=0xf0
+ 174   2          if(temp!=0xf0){
+ 175   3            delayms(10);
+ 176   3                temp=P1;
+ 177   3                temp=temp&0xf0;
+ 178   3            if(temp!=0xf0){
+ 179   4              temp=P1;
+C51 COMPILER V9.00   CALCULATOR                                                            03/01/2016 16:31:57 PAGE 4   
+
+ 180   4              switch(temp&0xf0){
+ 181   5                case 0xe0:   //0xee,0xed,0xeb,0xe7;
+ 182   5                     key=4*i;    //0,4,8,12
+ 183   5                     break;
+ 184   5                case 0xd0:  //0xdd,0xdb,0xd7;
+ 185   5                     key=4*i+1;
+ 186   5                     break;
+ 187   5                case 0xb0:  //0xbd,0xbb,0xb7;
+ 188   5                     key=4*i+2;
+ 189   5                     break;
+ 190   5                case 0x70:  //0x7d,0x7b,0x77;
+ 191   5                     key=4*i+3;
+ 192   5                     break;
+ 193   5               }
+ 194   4               while(temp!=0xf0){
+ 195   5                 temp=P1;
+ 196   5                 temp=temp&0xf0;
+ 197   5               }
+ 198   4              //display(key);
+ 199   4            }
+ 200   3          }
+ 201   2              line=(line<<1)+1;       
+ 202   2        }
+ 203   1        return key;
+ 204   1      }
+ 205          
+ 206          
+ 207          
+ 208          /*****************************************************************************************
+ 209                  扫描输入的全部数据
+ 210                  1.输入数字：
+ 211                          （1）如果上一步按的是“=”,清屏，重置数据，重新计算
+ 212                          （2）判断是否已经输入运算符，未输入，读取为第一个数，否则读取为第二个数
+ 213                  2.输入运算符：
+ 214                          将运算符赋值给opc
+ 215                  3.输入等号：
+ 216                          对两个操作数进行运算，得出结果并显示在第二行
+ 217          *******************************************************************************************/
+ 218          void key_proc(){ 
+ 219   1        uchar i,key;
+ 220   1        for(i=0;i<pos;i++){
+ 221   2          key=tb[i];
+ 222   2          if((key>='0')&&(key<='9')){ 
+ 223   3              if(lastkey=='='){ //如果上一次按的是'=' ，清屏，重置数据，重新计算
+ 224   4                         write_com(0x01);
+ 225   4                     op1=0;op2=0;opc=0;res=0;pos=0;
+ 226   4              }
+ 227   3          
+ 228   3                      if(opc==0){  //第一个操作数
+ 229   4                              op1=op1*10+(key-'0');
+ 230   4                      }
+ 231   3                      else{ //第二个操作数
+ 232   4                               op2=op2*10+(key-'0');
+ 233   4                      }
+ 234   3               }
+ 235   2               else if((key=='+')||(key=='-')||(key=='*')||(key=='/')){        
+ 236   3                      opc=key;
+ 237   3               }
+ 238   2              else if(key=='='){
+ 239   3               
+ 240   3                      switch(opc){
+ 241   4                      op1=~op1+1;
+C51 COMPILER V9.00   CALCULATOR                                                            03/01/2016 16:31:57 PAGE 5   
+
+ 242   4                      op2=~op2+1;
+ 243   4                 case '+':res=op1+op2;break;
+ 244   4                 case '-':res=op1-op2;break;
+ 245   4                 case '*':res=op1*op2;break;
+ 246   4                 case '/': if(op2==0){
+ 247   5                         ERROR=1;
+ 248   5                         break;
+ 249   5                 }else
+ 250   4                 res=op1/op2;break;
+ 251   4               }      
+ 252   3               display1602i(1,1,res);
+ 253   3        }
+ 254   2       }
+ 255   1      }
+ 256          
+ 257          void main(){    
+ 258   1              uchar key;
+ 259   1              init();  //液晶初始化
+ 260   1              while(1){ 
+ 261   2                      key=matrixkeyscan();  //键盘扫描
+ 262   2                  if(key<16){ 
+ 263   3                      key=table[key];     //将当前按下键位转换成对应的字符
+ 264   3      
+ 265   3      /************按下'C'，如果已经输入数据，向前删除一位***************/            
+ 266   3                      if(key=='C'){  
+ 267   4                                      if(pos>0){ //pos大于0，即已经输入数据
+ 268   5                                      pos--;
+ 269   5                              display1602c(pos,0,' '); //在pos位置写入' '，即删除
+ 270   5                              write_com(0x10);//光标向左平移一位，AC值减1
+ 271   5                                      }
+ 272   4                              }
+ 273   3      /********************  按下'='  *******************************/
+ 274   3                              else if(key=='='){ //按下‘=’
+ 275   4                                      tb[pos]=key;
+ 276   4                                      display1602c(pos++,0,key);      //显示等号
+ 277   4                                      key_proc();             //计算并显示结果
+ 278   4                              }
+ 279   3      
+ 280   3      /********************  按下数字键或操作符  *******************************/
+ 281   3                              else{
+ 282   4                                      if(lastkey=='='){//如果上一步已经按了=计算结果  
+ 283   5                                              if((key>='0')&&(key<='9')){//再按下数字，第一行清屏，重新计算
+ 284   6                                      write_com(0x01);
+ 285   6                                              op1=0;op2=0;opc=0;res=0;pos=0;                  
+ 286   6                                              }
+ 287   5                                              else{//再按下操作符，清屏，显示上一步计算结果
+ 288   6                                      write_com(0x01);
+ 289   6                                                      pos=0;
+ 290   6                                                      pos=display1602i(pos,0,res);
+ 291   6                                              op1=0;op2=0;opc=0;res=0;
+ 292   6                                      
+ 293   6                                              }       
+ 294   5                                      }  
+ 295   4      
+ 296   4                                      tb[pos]=key;
+ 297   4                                      display1602c(pos++,0,key);      //显示按下的字符
+ 298   4                              }  
+ 299   3                      lastkey=key;
+ 300   3                      }
+ 301   2              }
+ 302   1      }
+ 303          
+C51 COMPILER V9.00   CALCULATOR                                                            03/01/2016 16:31:57 PAGE 6   
+
+*** WARNING C291 IN LINE 149 OF CALCULATOR.C: not every exit path returns a value
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    943    ----
+   CONSTANT SIZE    =     16    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     26      16
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)
