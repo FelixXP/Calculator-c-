@@ -8,15 +8,17 @@ uchar code table[]={
 	'C','0','=','/'
 };
 uchar tb[12];
+uchar temp[3];
 sbit lcden=P3^4;	//液晶使能端
 sbit lcdrs=P3^5;	//液晶数据命令选择端
 sbit dula=P2^6;		//申明U1锁存器的锁存端
 sbit wela=P2^7;		//申明U2锁存器的锁存端
 uchar num;
-int ERROR=0;
+int STATU=0;	   //状态码 标志除数为〇 结果为小数 默认0为正常状态
 uint op1=0,op2=0;  //op1->第一个输入数	op2->第二个输入数	
 uchar opc=0,pos=0; //opc->运算符  ops->位置
 long int res=0;			//计算结果初值为0
+int res2=0;			//小数部分
 uchar lastkey;
 
 /************************
@@ -102,38 +104,71 @@ void display1602s(uchar x,uchar y,uchar *s){
 		获取结果的每一位并输出显示
 *******************************************/
 uchar display1602i(uchar x,uchar y,int num){ 
-  if(ERROR==1){
-	   write_com(0x80+(y*0x40));	
-		write_data('x'); //在计算结果前显示'='
-		ERROR=0;
-  }
-  else{
-  	//x=0-15,y=0-1;
-  uchar Addr,a[6],t=0,i,flag=0;
-    if(num==0){
-  	a[t++]='0';
-  }   
-  if (num<0){//如果计算结果为负数，将它转换成正数 
-    num=-num; 
-    flag=1;   
-  }
-  while(num!=0){//读取计算结果的每一位的数字 a[0]->个位		a[1]->十位....	
-    a[t++]=num%10+'0';
-    num=num/10;
-  } 
-	if(flag)//如果计算结果为复数，添加负号'-'
-	a[t++]='-'; 
-	Addr=x+(y*0x40);
-/*	if(tb[0]=='/'||tb[0]=='*'){ //如果第一个输入是*或者/，报错
-	   display1602c(0,1,'X');
-	   op1=0;op2=0;opc=0;res=0;pos=0;
-		uchar info[6]="ERROR";
+
+
+/**************2016.3.1液晶显示前判断是够出错**********************/
+
+
+  if(STATU==1){ /*除数为0，显示ERROR*/
+  		uchar code info[6]="ERROR";
+		int i=0;
 		write_com(0x80+(y*0x40));
-		for(i=0;info[i];i++){
-			write_data(info[i]);
+		for(i=0;i<5;i++){	
+			write_data(info[i]); //在计算结果前显示''
+		}
+	
+		STATU=0;
+  }
+	else if(STATU==2){  /*结果为小数*/
+		uchar Addr,a[6],t=0,i,flag=0;
+		if(num==0){
+			a[t++]='0';
+		} 
+		while(num!=0){//读取计算结果的每一位的数字 	
+			a[t++]=num%10+'0';
+			num=num/10;
+		} 
+		if(flag){//如果计算结果为负数，添加负号'-'
+			a[t++]='-'; 
+		}
+	
+		Addr=x+(y*0x40);
+		write_com(0x80+(y*0x40));	
+		write_data('='); //在计算结果前显示'='
+		write_com(0x80+Addr);
+		for(i=0;i<t;i++){	 
+			write_data(a[t-1-i]);
+			tb[i]=a[t-1-i];
+		}
+		write_data('.');
+		
+		for(i=0;i<3;i++){//读取小数部分的每一位的数字并显示....			
+			temp[i]=res2%10+'0';								  
+			res2=res2/10;	
 		}
 
-	}else{ */
+		for(i=0;i<3;i++){
+			write_data(temp[2-i]);
+		}
+		STATU=0;
+	}
+	else{/*结果为正常数据*/
+		uchar Addr,a[6],t=0,i,flag=0;
+		if(num==0){
+			a[t++]='0';
+		}   
+		if (num<0){//如果计算结果为负数，将它转换成正数 
+			num=-num; 
+			flag=1;   
+		}
+		while(num!=0){//读取计算结果的每一位的数字	
+		a[t++]=num%10+'0';
+		num=num/10;
+		} 
+		if(flag){//如果计算结果为负数，添加负号'-'
+			a[t++]='-'; 
+		}
+		Addr=x+(y*0x40);
   		write_com(0x80+(y*0x40));	
 		write_data('='); //在计算结果前显示'='
 
@@ -142,12 +177,9 @@ uchar display1602i(uchar x,uchar y,int num){
 			write_data(a[t-1-i]);
 			tb[i]=a[t-1-i];
   		}
-	
-  
-  return (x+t);
-  }
+	return (x+t);
+	}
 }
-
 
 
 /***********************
@@ -217,6 +249,9 @@ uchar matrixkeyscan(){
 *******************************************************************************************/
 void key_proc(){ 
   uchar i,key;
+  if(tb[0]=='/'||tb[0]=='*'){
+  	STATU=1;
+  }
   for(i=0;i<pos;i++){
     key=tb[i];
     if((key>='0')&&(key<='9')){	
@@ -236,21 +271,27 @@ void key_proc(){
 	 	opc=key;
   	 }
 	else if(key=='='){
- 	 
-	 	switch(opc){
-		op1=~op1+1;
-		op2=~op2+1;
-	   case '+':res=op1+op2;break;
-	   case '-':res=op1-op2;break;
-	   case '*':res=op1*op2;break;
-	   case '/': if(op2==0){
-	   	   ERROR=1;
-		   break;
-	   }else
-	   res=op1/op2;break;
-	 }	
-	 display1602i(1,1,res);
-  }
+		switch(opc){
+		case '+':res=op1+op2;break;
+		case '-':res=op1-op2;break;
+		case '*':res=op1*op2;break;
+		case '/': 
+			if(op2==0){/*如果除数为0，状态码赋值为1*/
+	   	   		STATU=1;
+		   		break;
+	   		}
+	   		else if(op1%op2!=0){/*如果结果为小数，状态码赋值为2*/
+				STATU=2;
+				res=op1/op2;
+				res2=op1%op2*1000/op2;
+				break;
+	   		}
+	   		else{
+				res=op1/op2;break;
+			}		
+		}	
+		display1602i(1,1,res);
+	}
  }
 }
 

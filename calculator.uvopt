@@ -186,10 +186,10 @@
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <Focus>0</Focus>
-      <ColumnNumber>10</ColumnNumber>
+      <ColumnNumber>19</ColumnNumber>
       <tvExpOptDlg>0</tvExpOptDlg>
-      <TopLine>235</TopLine>
-      <CurrentLine>246</CurrentLine>
+      <TopLine>1</TopLine>
+      <CurrentLine>1</CurrentLine>
       <bDave2>0</bDave2>
       <PathWithFileName>.\calculator.c</PathWithFileName>
       <FilenameWithoutPath>calculator.c</FilenameWithoutPath>
@@ -1541,9 +1541,9 @@
       <Documents>
         <Doc>
           <Name>.\calculator.c</Name>
-          <ColumnNumber>15</ColumnNumber>
-          <TopLine>97</TopLine>
-          <CurrentLine>107</CurrentLine>
+          <ColumnNumber>19</ColumnNumber>
+          <TopLine>1</TopLine>
+          <CurrentLine>1</CurrentLine>
         </Doc>
       </Documents>
     </MDIGroup>
